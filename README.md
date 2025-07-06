@@ -2,7 +2,7 @@
 
 ## Overview
 
-NotebookML is a command-line interface (CLI) tool designed to help you interact
+NotebookML is a command-line interface (CLI) tool to help you interact
 with your documents and notes using a local Large Language Model (LLM) via
 Ollama. It allows you to upload documents, ask questions based on their
 content, manage tags, view conversation history, and more.

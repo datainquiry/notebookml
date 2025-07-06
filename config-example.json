@@ -4,4 +4,5 @@
   "ollamaQueryModel": "llama3",
   "ollamaTemperature": 0.0,
   "databasePath": "notebookml.db"
+
 }

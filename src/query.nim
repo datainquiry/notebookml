@@ -10,8 +10,6 @@ import database
 import embeddings
 import config
 
-
-
 type
   OllamaGenerateRequest = object
     model*: string
@@ -32,21 +30,13 @@ proc getRelevantChunks(query: string): seq[Chunk] =
   let db = getDatabase()
   result = db.findSimilarChunks(queryVector, topK = 3)
 
-proc constructPrompt(query: string, chunks: seq[Chunk], history: seq[NotebookEntry]): string =
+proc constructPrompt(query: string, chunks: seq[Chunk]): string =
   ## Constructs the prompt for the LLM based on the query, relevant chunks, and conversation history.
   var context = ""
   for chunk in chunks:
     context &= chunk.text & "\n\n"
 
-  var historyText = ""
-  if history.len > 0:
-    historyText = "Conversation History:\n"
-    for entry in history:
-      historyText &= "- Q: " & entry.queryText & "\n"
-      historyText &= "  A: " & entry.answerText & "\n"
-    historyText &= "\n"
-  
-  result = historyText & "Document Context:\n---\n" & context & "---\n\nQuestion: " & query & "\n\nAnswer:"
+  result = "Document Context:\n---\n" & context & "---\n\nQuestion: " & query & "\n\nAnswer:"
 
 proc callLlm(prompt: string): string =
   ## Calls the LLM (Ollama) with the constructed prompt and returns the answer.
@@ -54,13 +44,11 @@ proc callLlm(prompt: string): string =
   let client = newHttpClient()
   defer: client.close()
 
-  let systemPrompt = "You are a helpful assistant. Answer the question truthfully and concisely. Format your response using Markdown. If the answer is not in the provided context, respond with 'I couldn't find relevant information for your query.'"
-
   let requestBody = %*OllamaGenerateRequest(
     model: config.ollamaQueryModel,
     prompt: prompt,
     stream: false,
-    system: systemPrompt,
+    system: config.systemPrompt,
     temperature: config.ollamaTemperature
   )
 
@@ -89,13 +77,7 @@ proc answerQuery*(query: string): string =
     return "I couldn't find relevant information for your query."
 
   # 2. Construct prompt
-  echo "Found relevant context. Generating answer..."
-  var history: seq[NotebookEntry]
-  if similarChunks.len > 0:
-    let primaryDocId = similarChunks[0].documentId
-    history = db.listNotebookEntries(primaryDocId)
-
-  let prompt = constructPrompt(query, similarChunks, history)
+  let prompt = constructPrompt(query, similarChunks)
 
   # 3. Call LLM and get answer
   let answer = callLlm(prompt)

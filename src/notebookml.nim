@@ -13,28 +13,52 @@ import times
 import std/osproc
 
 proc showHelp(): string =
-  result = "**NotebookML CLI** - A command line interface for NotebookML\n" &
-           "Usage:\n" &
-           "  notebookml --help                                 Show this help message\n" &
-           "  notebookml --init                                 Initialize the database\n" &
-           "  notebookml --upload:<file_path>                   Upload a document\n" &
-           "  notebookml --list:tag                             List all uploaded documents\n" &
-           "  notebookml --ask:<query_text>                     Ask a question\n" &
-           "  notebookml --notebook:<doc_id>                    View Q&A history for a document\n" &
-           "  notebookml --delete:<doc_id>                      Delete a document and its data\n" &
-           "  notebookml --tag:<doc_id>:<add|remove>:<tag_name> Add or remove a tag from a document\n" &
-           "  notebookml --rename:<doc_id>:<new_name>           Rename a document\n" &
-           "  notebookml --tags                                 List all available tags\n" &
-           "  notebookml --db:<database_path>                   Specify a custom database file (overrides config)"
+  result = """
+**NotebookML CLI** - A command line interface for NotebookML
+
+Usage:
+```
+    notebookml --help
+        Show this help message
+    
+    notebookml --init
+        Initialize the database
+    
+    notebookml --upload:<file_path>
+        Upload a document
+
+    notebookml --list:tag
+        List all uploaded documents
+
+    notebookml --ask:<query_text>
+        Ask a question
+        
+    notebookml --notebook:<doc_id>
+        View Q&A history for a document
+
+    notebookml --delete:<doc_id>
+        Delete a document and its data
+    
+    notebookml --tag:<doc_id>:<add|remove>:<tag_name>
+        Add or remove a tag from a document
+    
+    notebookml --rename:<doc_id>:<new_name>
+        Rename a document
+    
+    notebookml --tags
+        List all available tags
+```
+"""
 
 proc displayOutput(output: string) =
   let config = getConfig()
   if config.outputViewer.len > 0:
     # Write output to a temporary file and then use the viewer
     let timestamp = format(now(), "yyyyMMddHHmmss")
-    let tempFile = getTempDir() / ("notebookml_output_" & timestamp & ".txt")
+    let tempFile = getTempDir() / ("notebookml_output_" & timestamp & ".md")
     writeFile(tempFile, output)
-    let exitCode = execCmd(config.outputViewer & " " & tempFile)
+    let viewCommand = config.outputViewer & " " & tempFile
+    let exitCode = execCmd(viewCommand)
     if exitCode != 0:
       echo "Warning: Output viewer command '" & config.outputViewer & "' exited with code ", exitCode
     removeFile(tempFile)

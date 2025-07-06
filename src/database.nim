@@ -106,13 +106,8 @@ proc `=destroy`*(database: Database) =
 proc getDatabase*(dbName: string = ""): Database =
   let config = getConfig()
   let finalDbName = if dbName.len > 0: dbName else: config.databasePath
-  var flag = false
-  if not fileExists(dbName):
-    flag = true
   let db = getDbConn(finalDbName)
   result = Database(db: db)
-  if flag:
-    setupDatabase(result)
 
 proc tableExists*(database: Database, tableName: string): bool =
   echo "Checking if table exists: ", tableName
@@ -214,16 +209,17 @@ proc findSimilarChunks*(database: Database, queryVector: seq[float], topK: int =
       continue
 
     let similarity = cosineSimilarity(queryVector, chunkEmbedding)
-    allChunks.add((
-      chunk: Chunk(
-        id: parseInt(row[0]),
-        documentId: parseInt(row[1]),
-        chunkIndex: parseInt(row[2]),
-        text: row[3],
-        embedding: chunkEmbedding
-      ),
-      similarity: similarity
-    ))
+    if similarity > 0.2:
+      allChunks.add((
+        chunk: Chunk(
+          id: parseInt(row[0]),
+          documentId: parseInt(row[1]),
+          chunkIndex: parseInt(row[2]),
+          text: row[3],
+          embedding: chunkEmbedding
+        ),
+        similarity: similarity
+      ))
   
   allChunks.sort(proc(a, b: tuple[chunk: Chunk, similarity: float]): int =
     cmp(b.similarity, a.similarity)

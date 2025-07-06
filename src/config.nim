@@ -17,6 +17,7 @@ type
     ollamaTemperature*: float
     databasePath*: string
     outputViewer*: string
+    systemPrompt*: string
 
 var globalConfig*: Config
 
@@ -36,6 +37,7 @@ proc loadConfig*(filePath: string = "config.json") =
     globalConfig.ollamaTemperature = json["ollamaTemperature"].getFloat()
     globalConfig.databasePath = json["databasePath"].getStr()
     globalConfig.outputViewer = json["outputViewer"].getStr()
+    globalConfig.systemPrompt = json["systemPrompt"].getStr()
     configLoaded = true
   except Exception as e:
     triedPaths.add(filePath & " (Error: " & e.msg & ")")
