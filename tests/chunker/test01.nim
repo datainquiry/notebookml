@@ -6,7 +6,7 @@
 
 import unittest
 import strutils
-import chunker
+import ../../src/chunker
 
 suite "Text Chunking Tests (Simplified)":
   

@@ -1,0 +1,7 @@
+{
+  "ollamaUrl": "http://YOUR_SERVER_ADDRESS:11434",
+  "ollamaEmbeddingModel": "mxbai-embed-large",
+  "ollamaQueryModel": "llama3",
+  "ollamaTemperature": 0.0,
+  "databasePath": "notebookml.db"
+}
