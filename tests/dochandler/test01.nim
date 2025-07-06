@@ -1,7 +1,6 @@
 import unittest
 import os
 import ../../src/dochandler
-import osproc
 import strutils
 
 suite "dochandler tests":

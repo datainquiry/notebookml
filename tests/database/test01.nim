@@ -9,7 +9,7 @@ import os
 import options
 import db_connector/db_sqlite
 import strutils
-import std/json
+import json
 import ../../src/database
 import ../../src/config
 
@@ -35,13 +35,16 @@ proc teardown() =
   if fileExists(testDbFile):
     removeFile(testDbFile)
 
-suite "Database Module Tests (Week 1 & 2)":
+suite "Database Module Tests":
   setup: setup()
   teardown: teardown()
 
   test "Setup database creates tables":
     check db.tableExists("documents")
     check db.tableExists("chunks")
+    check db.tableExists("notebook")
+    check db.tableExists("tags")
+    check db.tableExists("document_tags")
 
   test "Add a new document":
     let docId = db.addDocument(docPath)
@@ -51,6 +54,7 @@ suite "Database Module Tests (Week 1 & 2)":
     check docs.len == 1
     check docs[0].filePath == docPath
     check docs[0].fileName == "test_doc.txt"
+    check docs[0].tags.len == 0
 
   test "Adding a duplicate document raises an exception":
     discard db.addDocument(docPath)
@@ -128,4 +132,83 @@ suite "Database Module Tests (Week 1 & 2)":
     check similarChunks[0].text == "cat"
     check similarChunks[1].text == "feline"
     check similarChunks[2].text == "dog"
+
+  test "Add notebook entry and list entries":
+    let docId = db.addDocument("/tmp/notebook_doc.txt")
+    db.addNotebookEntry(docId, "What is the main topic?", "The main topic is about Nim programming.")
+    db.addNotebookEntry(docId, "Who is the author?", "The author is Jaime Lopez.")
+
+    let entries = db.listNotebookEntries(docId)
+    check entries.len == 2
+    check entries[0].queryText == "What is the main topic?"
+    check entries[1].answerText == "The author is Jaime Lopez."
+
+  test "Delete document also deletes associated chunks and notebook entries":
+    let docId = db.addDocument("/tmp/delete_doc.txt")
+    db.addChunk(docId, 0, "Chunk to be deleted.")
+    db.addNotebookEntry(docId, "Query for deletion.", "Answer for deletion.")
+
+    # Verify they exist before deletion
+    check db.findChunkByText("Chunk to be deleted.").isSome()
+    check db.listNotebookEntries(docId).len == 1
+
+    db.deleteDocument(docId)
+
+    # Verify they are deleted
+    check db.listDocuments().len == 0 # Assuming this is the only document
+    check db.findChunkByText("Chunk to be deleted.").isNone()
+    check db.listNotebookEntries(docId).len == 0
+
+  test "Add and list tags for a document":
+    let docId = db.addDocument("/tmp/tagged_doc.txt")
+    db.addTag(docId, "programming")
+    db.addTag(docId, "nim")
+    db.addTag(docId, "database")
+
+    let docs = db.listDocuments()
+    var taggedDoc: Document
+    for d in docs:
+      if d.id == docId:
+        taggedDoc = d
+        break
+    check taggedDoc.tags.len == 3
+    check "programming" in taggedDoc.tags
+    check "nim" in taggedDoc.tags
+    check "database" in taggedDoc.tags
+
+  test "Remove tag from a document":
+    let docId = db.addDocument("/tmp/remove_tag_doc.txt")
+    db.addTag(docId, "tag1")
+    db.addTag(docId, "tag2")
+
+    var docs = db.listDocuments()
+    var taggedDoc: Document
+    for d in docs:
+      if d.id == docId:
+        taggedDoc = d
+        break
+    check taggedDoc.tags.len == 2
+
+    db.removeTag(docId, "tag1")
+    docs = db.listDocuments() # Reload documents to get updated tags
+    for d in docs:
+      if d.id == docId:
+        taggedDoc = d
+        break
+    check taggedDoc.tags.len == 1
+    check "tag2" in taggedDoc.tags
+    check not ("tag1" in taggedDoc.tags)
+
+  test "Rename document":
+    let docId = db.addDocument("/tmp/old_name.txt")
+    db.renameDocument(docId, "new_name.txt")
+
+    let docs = db.listDocuments()
+    var renamedDoc: Document
+    for d in docs:
+      if d.id == docId:
+        renamedDoc = d
+        break
+    check renamedDoc.fileName == "new_name.txt"
+    check renamedDoc.filePath == "/tmp/old_name.txt" # filePath should remain the same, only fileName changes
 

@@ -89,17 +89,23 @@
 
 * Get embedding for user query
 * Find top-k similar chunks via cosine distance
-* Concatenate chunk texts as context
-* Send prompt + context to LLM for generation
+* **Retrieve relevant past queries and answers from the notebook history.**
+* Concatenate chunk texts and relevant conversation history as context.
+* Send prompt + augmented context to LLM for generation.
 
 ### 3.6 LLM Integration
 
 * Call Ollama API (`/generate`)
-* Prompt structure:
+* Prompt structure (augmented with history):
 
 ```text
-Answer the question based on the following document context:
+You are a helpful assistant. Answer the question truthfully and concisely.
+If the answer is not in the provided context, respond with 'I couldn't find relevant information for your query.'
 
+Conversation History:
+{past_queries_and_answers}
+
+Document Context:
 {chunk_texts}
 
 Question: {user_question}

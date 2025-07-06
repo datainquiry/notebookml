@@ -23,39 +23,38 @@ type
   OllamaGenerateResponse = object
     response*: string
 
-proc answerQuery*(query: string): string =
-  ## 1. Gets an embedding for the user's query.
-  ## 2. Finds relevant chunks from the vector store.
-  ## 3. Constructs a prompt and sends it to the LLM.
-  ## 4. Returns the final answer.
-
-  let config = getConfig()
-
-  # 1. Get embedding for the query
+proc getRelevantChunks(query: string): seq[Chunk] =
+  ## Generates an embedding for the query and finds relevant chunks.
   echo "Generating embedding for query..."
   let queryVector = getEmbedding(query)
 
-  # 2. Find relevant chunks
   echo "Finding relevant chunks..."
   let db = getDatabase()
-  let similarChunks = db.findSimilarChunks(queryVector, topK = 3)
+  result = db.findSimilarChunks(queryVector, topK = 3)
 
-  if similarChunks.len == 0:
-    return "I couldn't find relevant information for your query."
-
-  # 3. Construct a prompt
-  echo "Found relevant context. Generating answer..."
+proc constructPrompt(query: string, chunks: seq[Chunk], history: seq[NotebookEntry]): string =
+  ## Constructs the prompt for the LLM based on the query, relevant chunks, and conversation history.
   var context = ""
-  for chunk in similarChunks:
+  for chunk in chunks:
     context &= chunk.text & "\n\n"
-  
-  let prompt = "Context:\n---\n" & context & "---\n\nQuestion: " & query & "\n\nAnswer:"
 
-  # 4. Send to LLM and get answer
+  var historyText = ""
+  if history.len > 0:
+    historyText = "Conversation History:\n"
+    for entry in history:
+      historyText &= "- Q: " & entry.queryText & "\n"
+      historyText &= "  A: " & entry.answerText & "\n"
+    historyText &= "\n"
+  
+  result = historyText & "Document Context:\n---\n" & context & "---\n\nQuestion: " & query & "\n\nAnswer:"
+
+proc callLlm(prompt: string): string =
+  ## Calls the LLM (Ollama) with the constructed prompt and returns the answer.
+  let config = getConfig()
   let client = newHttpClient()
   defer: client.close()
 
-  let systemPrompt = "You are a helpful assistant. Answer the question truthfully and concisely. If the answer is not in the provided context, respond with 'I couldn't find relevant information for your query.'"
+  let systemPrompt = "You are a helpful assistant. Answer the question truthfully and concisely. Format your response using Markdown. If the answer is not in the provided context, respond with 'I couldn't find relevant information for your query.'"
 
   let requestBody = %*OllamaGenerateRequest(
     model: config.ollamaQueryModel,
@@ -68,12 +67,44 @@ proc answerQuery*(query: string): string =
   try:
     let response = client.post(config.ollamaUrl & "/api/generate", body = $requestBody)
     if response.status != "200 OK":
-      return "Error from LLM: " & response.body
+      raise newException(Exception, "Error from LLM: " & response.body)
     
     let parsedResponse = to(parseJson(response.body), OllamaGenerateResponse)
     result = parsedResponse.response
 
   except HttpRequestError as e:
-    return "Failed to connect to Ollama. Is it running? Error: " & config.ollamaUrl & "/api/generate. Error: " & e.msg
+    raise newException(Exception, "Failed to connect to Ollama. Is it running? Error: " & config.ollamaUrl & "/api/generate. Error: " & e.msg)
   except JsonParsingError as e:
-    return "Failed to parse LLM response: " & e.msg
+    raise newException(Exception, "Failed to parse LLM response: " & e.msg)
+
+proc answerQuery*(query: string): string =
+  ## Orchestrates the process of getting an AI-generated answer.
+
+  let db = getDatabase()
+
+  # 1. Get relevant chunks
+  let similarChunks = getRelevantChunks(query)
+
+  if similarChunks.len == 0:
+    return "I couldn't find relevant information for your query."
+
+  # 2. Construct prompt
+  echo "Found relevant context. Generating answer..."
+  var history: seq[NotebookEntry]
+  if similarChunks.len > 0:
+    let primaryDocId = similarChunks[0].documentId
+    history = db.listNotebookEntries(primaryDocId)
+
+  let prompt = constructPrompt(query, similarChunks, history)
+
+  # 3. Call LLM and get answer
+  let answer = callLlm(prompt)
+
+  # 4. Log the query and answer to the notebook
+  var loggedDocIds: seq[int]
+  for chunk in similarChunks:
+    if not (chunk.documentId in loggedDocIds):
+      db.addNotebookEntry(chunk.documentId, query, answer)
+      loggedDocIds.add(chunk.documentId)
+
+  return answer
