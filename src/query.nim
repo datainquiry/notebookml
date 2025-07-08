@@ -16,6 +16,7 @@ type
     prompt*: string
     stream*: bool
     system*: string
+    thinking*: bool
     temperature*: float
 
   OllamaGenerateResponse = object
@@ -28,7 +29,7 @@ proc getRelevantChunks(query: string): seq[Chunk] =
 
   echo "Finding relevant chunks..."
   let db = getDatabase()
-  result = db.findSimilarChunks(queryVector, topK = 3)
+  result = db.findSimilarChunks(queryVector, topK = 10)
 
 proc constructPrompt(query: string, chunks: seq[Chunk]): string =
   ## Constructs the prompt for the LLM based on the query, relevant chunks, and conversation history.
@@ -49,6 +50,7 @@ proc callLlm(prompt: string): string =
     prompt: prompt,
     stream: false,
     system: config.systemPrompt,
+    thinking: false,
     temperature: config.ollamaTemperature
   )
 
