@@ -1,8 +1,9 @@
 {
-  "ollamaUrl": "http://YOUR_SERVER_ADDRESS:11434",
+  "ollamaUrl": "http://127.0.0.1:11434",
   "ollamaEmbeddingModel": "mxbai-embed-large",
   "ollamaQueryModel": "llama3",
   "ollamaTemperature": 0.0,
-  "databasePath": "notebookml.db"
-
+  "databasePath": "notebookml.db",
+  "systemPrompt": "You're a research assistant. Anwser in the same language as the question. If the question cannot be answered based on the provided context, say 'I don't know'.",
+  "outputViewer": "glow" 
 }
