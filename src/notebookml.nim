@@ -1,5 +1,5 @@
 import std/[strutils, parseopt, os, osproc, times]
-import [config, clihandler]
+import config, clihandler
 
 proc showHelp(): string =
   result = """

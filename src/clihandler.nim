@@ -1,5 +1,5 @@
 import std/[os, strutils, strformat]
-import [database, dochandler, chunker, embeddings, query, history]
+import database, dochandler, chunker, embeddings, query, history
 
 proc handleInit*(): string =
   let db = getDatabase()
