@@ -1,16 +1,5 @@
-#
-# @file notebookml.nim
-# @author Jaime Lopez
-# @brief Exports the modules for the notebookml CLI.
-#
-
-import strutils
-import parseopt
-import clihandler
-import config
-import os
-import times
-import std/osproc
+import std/[strutils, parseopt, os, osproc, times]
+import [config, clihandler]
 
 proc showHelp(): string =
   result = """
@@ -66,13 +55,11 @@ proc displayOutput(output: string) =
     echo output
 
 proc runCli*() =
-
   loadConfig()
   var p = initOptParser()
   var filePath: string
   var query: string
   var commandProvided = false
-
   for kind, key, val in p.getopt():
     commandProvided = true
     case kind
@@ -122,7 +109,6 @@ proc runCli*() =
       displayOutput("Unknown argument: " & key)
     else:
       discard
-
   if not commandProvided:
     displayOutput(showHelp())
 

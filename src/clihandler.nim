@@ -1,70 +1,48 @@
-#
-# @file main.nim
-# @author Jaime Lopez
-# @brief Main entry point for the notebookml CLI.
-#
-
-# import options
-
-import os
-import strutils
-import strformat
-import database
-import dochandler
-import chunker
-import embeddings
-import query
-import history
+import std/[os, strutils, strformat]
+import [database, dochandler, chunker, embeddings, query, history]
 
 proc handleInit*(): string =
-  ## Initializes the database.
   let db = getDatabase()
   setupDatabase(db)
   result = "Database initialized successfully."
 
+## Orchestrates the document upload process:
+## 1. Calls `dochandler.extractText`.
+## 2. Calls `chunker.chunkText`.
+## 3. Calls `database.addDocument` and `database.addChunks`.
+## Prints success or error messages to the console.
 proc handleUpload*(filePath: string): string =
-  ## Orchestrates the document upload process:
-  ## 1. Calls `dochandler.extractText`.
-  ## 2. Calls `chunker.chunkText`.
-  ## 3. Calls `database.addDocument` and `database.addChunks`.
-  ## Prints success or error messages to the console.
   try:
     echo "Extracting text from: ", filePath
     let text = dochandler.extractText(filePath)
     echo "Text extracted successfully."
-
     echo "Chunking text..."
     let chunks = chunkText(text)
     echo "Text chunked successfully: ", chunks.len, " chunks created."
-
     let db = getDatabase()
     let docId = db.addDocument(filePath.absolutePath())
-    
     echo "Generating and storing embeddings for each chunk..."
     for i, chunkText in chunks:
       let embedding = getEmbedding(chunkText)
       db.addChunkWithEmbedding(docId, i, chunkText, embedding)
-    
     result = "Successfully uploaded, chunked, and embedded file: " & filePath
-
   except Exception as e:
     echo "Error during upload: ", e.msg
 
+## 1. Calls `database.listDocuments`.
+## 2. Formats and prints the list of documents to the console.
 proc handleList*(tag: string = ""): string =
-  ## 1. Calls `database.listDocuments`.
-  ## 2. Formats and prints the list of documents to the console.
   let db = getDatabase()
   let documents = db.listDocuments(tag)
   if documents.len == 0:
-    result = "No documents found."
-  else:
-    var output = "Documents:\n"
-    for doc in documents:
-      var tagsStr = ""
-      if doc.tags.len > 0:
-        tagsStr = ", **Tags**: `" & doc.tags.join("`, `") & "`"
-      output &= $ "- **ID**: {doc.id}, **File**: `{doc.fileName}` (`{doc.filePath}`), **Created**: {doc.createdAt}{tagsStr}\n"
-    result = output
+    return "No documents found."
+  var output = "Documents:\n"
+  for doc in documents:
+    var tagsStr = ""
+    if doc.tags.len > 0:
+      tagsStr = ", **Tags**: `" & doc.tags.join("`, `") & "`"
+    output &= $ "- **ID**: {doc.id}, **File**: `{doc.fileName}` (`{doc.filePath}`), **Created**: {doc.createdAt}{tagsStr}\n"
+  result = output
 
 proc handleAsk*(queryText: string): string =
   result = answerQuery(queryText)

@@ -36,6 +36,8 @@ content, manage tags, view conversation history, and more.
   [https://ollama.ai/](https://ollama.ai/). Make sure you have at least one
   model downloaded (e.g., `ollama pull llama2`).
 - **`db_connector` Nimble Package:** ```bash nimble install db_connector ```
+- [Glow](https://github.com/charmbracelet/glow): a terminal markdown viewer
+- pdftotext command line tool
 
 ### Building NotebookML
 
