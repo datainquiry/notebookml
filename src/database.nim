@@ -1,16 +1,5 @@
-#
-# @file database.nim
-# @author Jaime Lopez
-# @brief Handles all interactions with the SQLite database.
-#
-
-import strutils
+import std/[strutils, os, json, options, math, algorithm]
 import db_connector/db_sqlite
-import os
-import options
-import json
-import math
-import algorithm
 import config
 
 type
@@ -39,7 +28,6 @@ type
     timestamp*: string
 
 proc setupDatabase*(database: Database) =
-  ## Initializes the database and creates the `documents` and `chunks` tables if they don't exist.
   let db = database.db
   db.exec(sql"DROP TABLE IF EXISTS documents")
   db.exec(sql"DROP TABLE IF EXISTS chunks")
@@ -97,7 +85,6 @@ proc getDbConn(dbName: string): DbConn =
     quit(1)
 
 proc `=destroy`*(database: Database) =
-  ## Closes the database connection when the Database object is destroyed.
   try:
     database.db.close()
   except DbError as e:
@@ -118,16 +105,17 @@ proc tableExists*(database: Database, tableName: string): bool =
 proc addDocument*(database: Database, filePath: string): int64 =
   let db = database.db
   let fileName = filePath.extractFilename()
-  let id = db.tryInsertId(sql"INSERT INTO documents (file_name, file_path) VALUES (?, ?)", fileName, filePath)
+  let id = db.tryInsertId(sql"INSERT INTO documents (file_name, file_path) VALUES (?, ?)",
+      fileName, filePath)
   if id == -1:
     dbError(db)
   return id
 
 proc addChunk*(database: Database, docId: int64, index: int, text: string) =
-  database.db.exec(sql"INSERT INTO chunks (document_id, chunk_index, text) VALUES (?, ?, ?)", docId, index, text)
+  database.db.exec(sql"INSERT INTO chunks (document_id, chunk_index, text) VALUES (?, ?, ?)",
+      docId, index, text)
 
 proc addChunks*(database: Database, docId: int64, chunks: seq[string]) =
-  ## A helper proc that iterates over a sequence of chunk texts and adds them to the database.
   let db = database.db
   db.exec(sql"BEGIN TRANSACTION")
   try:
@@ -138,13 +126,13 @@ proc addChunks*(database: Database, docId: int64, chunks: seq[string]) =
     db.exec(sql"ROLLBACK")
     raise
 
-proc addChunkWithEmbedding*(database: Database, docId: int64, index: int, text: string, embedding: seq[float]) =
-  ## Inserts a chunk with its corresponding vector embedding.
+proc addChunkWithEmbedding*(database: Database, docId: int64, index: int,
+    text: string, embedding: seq[float]) =
   let embeddingJson = %*(embedding)
-  database.db.exec(sql"INSERT INTO chunks (document_id, chunk_index, text, embedding) VALUES (?, ?, ?, ?)", docId, index, text, embeddingJson)
+  database.db.exec(sql"INSERT INTO chunks (document_id, chunk_index, text, embedding) VALUES (?, ?, ?, ?)",
+      docId, index, text, embeddingJson)
 
 proc listDocuments*(database: Database, filterTag: string = ""): seq[Document] =
-  ## Retrieves document records from the database, optionally filtered by tag, including their tags.
   result = newSeq[Document]()
   var query = "SELECT d.id, d.file_name, d.file_path, d.created_at FROM documents d"
   var params: seq[string] = @[]
@@ -163,7 +151,6 @@ proc listDocuments*(database: Database, filterTag: string = ""): seq[Document] =
       createdAt: row[3],
       tags: @[] # Initialize with empty sequence
     )
-    # Fetch tags for the current document (always fetch all tags for the document, regardless of filterTag)
     for tagRow in database.db.fastRows(sql"SELECT t.name FROM tags t JOIN document_tags dt ON t.id = dt.tag_id WHERE dt.document_id = ?", doc.id):
       doc.tags.add(tagRow[0])
     result.add(doc)
@@ -196,10 +183,9 @@ proc cosineSimilarity(a, b: seq[float]): float =
     return 0.0
   result = dotProduct / (sqrt(normA) * sqrt(normB))
 
-proc findSimilarChunks*(database: Database, queryVector: seq[float], topK: int = 5): seq[Chunk] =
-  ## Finds the `topK` most similar chunks to a given query vector using cosine similarity.
+proc findSimilarChunks*(database: Database, queryVector: seq[float],
+    topK: int = 5): seq[Chunk] =
   var allChunks = newSeq[tuple[chunk: Chunk, similarity: float]]()
-
   for row in database.db.fastRows(sql"SELECT id, document_id, chunk_index, text, embedding FROM chunks WHERE embedding IS NOT NULL"):
     let embeddingJson = row[4]
     var chunkEmbedding: seq[float]
@@ -207,7 +193,6 @@ proc findSimilarChunks*(database: Database, queryVector: seq[float], topK: int =
       chunkEmbedding = to(parseJson(embeddingJson), seq[float])
     except JsonParsingError:
       continue
-
     let similarity = cosineSimilarity(queryVector, chunkEmbedding)
     if similarity > 0.2:
       allChunks.add((
@@ -220,19 +205,20 @@ proc findSimilarChunks*(database: Database, queryVector: seq[float], topK: int =
         ),
         similarity: similarity
       ))
-  
+
   allChunks.sort(proc(a, b: tuple[chunk: Chunk, similarity: float]): int =
     cmp(b.similarity, a.similarity)
   )
-
   result = newSeq[Chunk]()
   for i in 0 ..< min(topK, allChunks.len):
     result.add(allChunks[i].chunk)
 
 
-proc addNotebookEntry*(database: Database, docId: int, query: string, answer: string) =
+proc addNotebookEntry*(database: Database, docId: int, query: string,
+    answer: string) =
   ## Inserts a new entry into the `notebook` table.
-  database.db.exec(sql"INSERT INTO notebook (document_id, query_text, answer_text) VALUES (?, ?, ?)", docId, query, answer)
+  database.db.exec(sql"INSERT INTO notebook (document_id, query_text, answer_text) VALUES (?, ?, ?)",
+      docId, query, answer)
 
 proc listNotebookEntries*(database: Database, docId: int): seq[NotebookEntry] =
   ## Retrieves all notebook entries for a given document ID.
@@ -260,40 +246,40 @@ proc deleteDocument*(database: Database, docId: int) =
     raise newException(DbError, "Failed to delete document and its associated data: " & e.msg)
 
 proc addTag*(database: Database, docId: int, tag: string) =
-  ## Adds a tag to a document.
   let db = database.db
   db.exec(sql"BEGIN TRANSACTION")
   try:
     # Insert tag if it doesn't exist
     db.exec(sql"INSERT OR IGNORE INTO tags (name) VALUES (?)", tag)
     # Get tag ID
-    let tagId = db.getValue(sql"SELECT id FROM tags WHERE name = ?", tag).parseInt()
+    let tagId = db.getValue(sql"SELECT id FROM tags WHERE name = ?",
+        tag).parseInt()
     # Link document and tag
-    db.exec(sql"INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)", docId, tagId)
+    db.exec(sql"INSERT OR IGNORE INTO document_tags (document_id, tag_id) VALUES (?, ?)",
+        docId, tagId)
     db.exec(sql"COMMIT")
   except Exception as e:
     db.exec(sql"ROLLBACK")
     raise newException(DbError, "Failed to add tag: " & e.msg)
 
 proc removeTag*(database: Database, docId: int, tag: string) =
-  ## Removes a tag from a document.
   let db = database.db
   db.exec(sql"BEGIN TRANSACTION")
   try:
-    let tagId = db.getValue(sql"SELECT id FROM tags WHERE name = ?", tag).parseInt()
-    db.exec(sql"DELETE FROM document_tags WHERE document_id = ? AND tag_id = ?", docId, tagId)
+    let tagId = db.getValue(sql"SELECT id FROM tags WHERE name = ?",
+        tag).parseInt()
+    db.exec(sql"DELETE FROM document_tags WHERE document_id = ? AND tag_id = ?",
+        docId, tagId)
     db.exec(sql"COMMIT")
   except Exception as e:
     db.exec(sql"ROLLBACK")
     raise newException(DbError, "Failed to remove tag: " & e.msg)
 
 proc renameDocument*(database: Database, docId: int, newName: string) =
-  ## Renames a document.
   let db = database.db
   db.exec(sql"UPDATE documents SET file_name = ? WHERE id = ?", newName, docId)
 
 proc listTags*(database: Database): seq[string] =
-  ## Retrieves all unique tags from the database.
   result = newSeq[string]()
   for row in database.db.fastRows(sql"SELECT name FROM tags ORDER BY name ASC"):
     result.add(row[0])
